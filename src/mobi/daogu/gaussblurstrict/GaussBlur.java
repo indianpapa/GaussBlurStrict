@@ -11,7 +11,7 @@ import android.renderscript.Type;
 /**Class of Gaussian blur filter. Applies a gaussian blur of the specified radius to a
  * given bitmap.
  * @author daogu.mobi@gmail.com */
-public final class GaussBlurStrict {
+public final class GaussBlur {
     private int mWidth, mHeight, mRetWidth, mRetHeight;
 
     private RSCBlurH mRSCBlurH;
@@ -44,7 +44,7 @@ public final class GaussBlurStrict {
         public RSCBlurH(RenderScript rs, int radiusX2, int width,
                 Allocation kernel, Allocation input, Allocation output) {
             super(rs, rs.getApplicationContext().getResources(),
-                    rs.getApplicationContext().getResources().getIdentifier( "rsc_blur_h",
+                    rs.getApplicationContext().getResources().getIdentifier( "rsc_blur_h_expand",
                             "raw", rs.getApplicationContext().getPackageName()));
             setVar(mExportVarIdx_pixn, width);
             setVar(mExportVarIdx_radiusX2, radiusX2);
@@ -91,14 +91,14 @@ public final class GaussBlurStrict {
      * @param radius : Radius of Gaussian blur.
      * @param width : Width of the input image.
      * @param height : Height of the input image.*/
-    public GaussBlurStrict(RenderScript rs, int radius, int width, int height) {
+    public GaussBlur(RenderScript rs, int radius, int width, int height) {
         int radiusX2 = radius * 2;
         mWidth = width;
         mHeight = height;
-        mRetWidth = width - radiusX2;
+        mRetWidth = width - radius;
         mRetHeight = height - radiusX2;
         mRS = rs;
-        create(radius / 3, radiusX2);
+        create(radius / 3f, radiusX2);
     }
 
     /**
@@ -106,14 +106,14 @@ public final class GaussBlurStrict {
      * @param radius : Radius of Gaussian blur.
      * @param width : Width of the input image.
      * @param height : Height of the input image.*/
-    public GaussBlurStrict(Context context, int radius, int width, int height) {
+    public GaussBlur(Context context, int radius, int width, int height) {
         int radiusX2 = radius * 2;
         mWidth = width;
         mHeight = height;
-        mRetWidth = width - radiusX2;
-        mRetHeight = height - radiusX2;;
+        mRetWidth = width - radius;
+        mRetHeight = height - radiusX2;
         mRS = RenderScript.create(context);
-        create(radius / 3, radiusX2);
+        create(radius / 3f, radiusX2);
     }
 
     private void create(float sigma, int radiusX2) {
@@ -136,7 +136,7 @@ public final class GaussBlurStrict {
         mRSCBlurV = new RSCBlurV(mRS, radiusX2, mRetWidth, mHeight, mAllocGuassKernel,
                 mAllocHBlur, mAllocVBlur);
 
-        short max = (short)(mWidth > mHeight ? mWidth : mHeight);
+        short max = (short)(mRetWidth > mHeight ? mRetWidth : mHeight);
         short[] ids = new short[max];
         for (short i = 0; i < max; i++) ids[i] = i;
         mAllocEachLineH.copyFrom(ids);
@@ -166,13 +166,20 @@ public final class GaussBlurStrict {
      * @throws Exception */
     public Bitmap generate(Bitmap input) throws Exception {
         if (input.getWidth() != mWidth || input.getHeight() != mHeight) {
-            throw new Exception("Input size not match. Expected is:" + mWidth + "x" + mHeight);
+            throw new Exception("Input size:" + input.getWidth() + "x" + input.getHeight()
+                    + " not match. Expected is:" + mWidth + "x" + mHeight);
         }
+
         mAllocInput.copyFrom(input);
+
         mRSCBlurH.process(mAllocEachLineH);
+
         mRSCBlurV.process(mAllocEachLineV);
+
         Bitmap retBmp = Bitmap.createBitmap(mRetWidth, mRetHeight, Bitmap.Config.ARGB_8888);
+
         mAllocVBlur.copyTo(retBmp);
+
         return retBmp;
     }
 
