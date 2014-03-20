@@ -10,7 +10,7 @@ import android.graphics.BitmapFactory;
 
 public class MainActivity extends Activity {
     private long mElapse;
-    private GaussBlurStrict mBlurMaker;
+    private GaussBlur mBlurMaker;
 
     /** Time stamp helper class.*/
     public final static class TimeStamp {
@@ -40,7 +40,7 @@ public class MainActivity extends Activity {
             Bitmap ret = null;
             try {
                 TimeStamp.reset();
-                ret = mBlurMaker.generate(params[0]);
+                ret = mBlurMaker.generateStrict(params[0]);
                 mElapse = TimeStamp.elapse();
             } catch (Exception e) {e.printStackTrace();}
             return ret;
@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         mElapse = 0L;
         Bitmap src = BitmapFactory.decodeResource(getResources(), R.drawable.im_balloon);
-        mBlurMaker = new GaussBlurStrict(this, 25, src.getWidth(), src.getHeight());
+        mBlurMaker = new GaussBlur(this, 20, src.getWidth(), src.getHeight());
         new ProcessTask().execute(src);
     }
 
