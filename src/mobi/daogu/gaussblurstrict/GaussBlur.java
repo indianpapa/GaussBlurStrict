@@ -9,11 +9,14 @@ import android.renderscript.RenderScript;
 import android.renderscript.ScriptC;
 import android.renderscript.Type;
 
-/**Class of Gaussian blur filter. Applies a gaussian blur of the specified radius to a
- * given bitmap.
+/**Class for fast generating Gaussian blur bitmap image.
  * @author daogu.mobi@gmail.com */
 public final class GaussBlur {
-    private int mWidth, mHeight, mRetWidth, mRetHeight;
+    /** The size of the input image.*/
+    private int mWidth, mHeight;
+
+    /** The size of the output image with edge cut-off.*/
+    private int mWidthS, mHeightS;
 
     private RSCBlurHStrict mRSCBlurHS;
     private RSCBlurVStrict mRSCBlurVS;
@@ -55,6 +58,8 @@ public final class GaussBlur {
             super(rs, rs.getApplicationContext().getResources(),
                     rs.getApplicationContext().getResources().getIdentifier( "rsc_blur_h",
                             "raw", rs.getApplicationContext().getPackageName()));
+
+            // On Android4.4 and later, The size is 16 byte-aligned per line.
             if (Build.VERSION.SDK_INT > 18) {
                 setVar(mExportVarIdx_dstlen, getAlignedPixn(width - radiusX2));
                 setVar(mExportVarIdx_srclen, getAlignedPixn(width));
@@ -62,6 +67,7 @@ public final class GaussBlur {
                 setVar(mExportVarIdx_dstlen, width - radiusX2);
                 setVar(mExportVarIdx_srclen, width);
             }
+
             setVar(mExportVarIdx_radiusX2, radiusX2);
             bindAllocation(kernel, mExportVarIdx_gGuass);
             bindAllocation(input, mExportVarIdx_gSrc);
@@ -77,11 +83,10 @@ public final class GaussBlur {
     private final static class RSCBlurVStrict extends ScriptC {
         private final static int mExportVarIdx_radiusX2 = 0;
         private final static int mExportVarIdx_dstlen = 1;
-        private final static int mExportVarIdx_srclen = 2;
-        private final static int mExportVarIdx_width = 3;
-        private final static int mExportVarIdx_gDst = 4;
-        private final static int mExportVarIdx_gSrc = 5;
-        private final static int mExportVarIdx_gGuass = 6;
+        private final static int mExportVarIdx_width = 2;
+        private final static int mExportVarIdx_gDst = 3;
+        private final static int mExportVarIdx_gSrc = 4;
+        private final static int mExportVarIdx_gGuass = 5;
         private final static int mExportForEachIdx_root = 0;
 
         public RSCBlurVStrict(RenderScript rs, int radiusX2, int width, int height,
@@ -90,13 +95,15 @@ public final class GaussBlur {
                     rs.getApplicationContext().getResources().getIdentifier( "rsc_blur_v",
                             "raw", rs.getApplicationContext().getPackageName()));
             setVar(mExportVarIdx_dstlen, height - radiusX2);
-            setVar(mExportVarIdx_srclen, height);
             setVar(mExportVarIdx_radiusX2, radiusX2);
+
+            // On Android4.4 and later, The size is 16 byte-aligned per line.
             if (Build.VERSION.SDK_INT > 18) {
                 setVar(mExportVarIdx_width, getAlignedPixn(width));
             } else {
                 setVar(mExportVarIdx_width, width);
             }
+
             bindAllocation(kernel, mExportVarIdx_gGuass);
             bindAllocation(input, mExportVarIdx_gSrc);
             bindAllocation(output, mExportVarIdx_gDst);
@@ -107,7 +114,7 @@ public final class GaussBlur {
         }
     }
 
-    /**
+    /** Class for fast generating Gaussian blur bitmap image.
      * @param rs : Specific {@link RenderScript} for this {@link GaussBlur} filter
      * @param radius : Radius of Gaussian blur.
      * @param width : Width of the input image.
@@ -116,13 +123,13 @@ public final class GaussBlur {
         int radiusX2 = radius * 2;
         mWidth = width;
         mHeight = height;
-        mRetWidth = width - radiusX2;
-        mRetHeight = height - radiusX2;
+        mWidthS = width - radiusX2;
+        mHeightS = height - radiusX2;
         mRS = rs;
         create(radius / 3f, radiusX2);
     }
 
-    /**
+    /** Class for fast generating Gaussian blur bitmap image.
      * @param context : The specific {@link Context} for creating {@link RenderScript}.
      * @param radius : Radius of Gaussian blur.
      * @param width : Width of the input image.
@@ -131,12 +138,14 @@ public final class GaussBlur {
         int radiusX2 = radius * 2;
         mWidth = width;
         mHeight = height;
-        mRetWidth = width - radiusX2;
-        mRetHeight = height - radiusX2;;
+        mWidthS = width - radiusX2;
+        mHeightS = height - radiusX2;;
         mRS = RenderScript.create(context);
         create(radius / 3f, radiusX2);
     }
 
+    /** Get {@link RenderScript} form this {@link GaussBlur}.
+     * @return the {@link RenderScript} belong to this {@link GaussBlur}.*/
     public RenderScript getRenderScript() {
         return mRS;
     }
@@ -145,8 +154,8 @@ public final class GaussBlur {
         int usage = Allocation.USAGE_SCRIPT;
         Type.Builder builder = new Type.Builder(mRS, Element.RGBA_8888(mRS));
         Type tp_in = builder.setX(mWidth).setY(mHeight).create();
-        Type tp_hb = builder.setX(mRetWidth).setY(mHeight).create();
-        Type tp_vb = builder.setX(mRetWidth).setY(mRetHeight).create();
+        Type tp_hb = builder.setX(mWidthS).setY(mHeight).create();
+        Type tp_vb = builder.setX(mWidthS).setY(mHeightS).create();
 
         mAllocInput = Allocation.createTyped(mRS, tp_in, usage);
         mAllocHBlur = Allocation.createTyped(mRS, tp_in, usage);
@@ -155,12 +164,12 @@ public final class GaussBlur {
 
         mAllocEachLineH = Allocation.createSized(mRS, Element.U16(mRS), mHeight, usage);
         mAllocEachLineV = Allocation.createSized(mRS, Element.U16(mRS), mWidth, usage);
-        mAllocEachLineVS = Allocation.createSized(mRS, Element.U16(mRS), mRetWidth, usage);
+        mAllocEachLineVS = Allocation.createSized(mRS, Element.U16(mRS), mWidthS, usage);
         mAllocGuassKernel = generateGaussKernel(sigma, radiusX2);
 
         mRSCBlurHS = new RSCBlurHStrict(mRS, radiusX2, mWidth, mAllocGuassKernel, mAllocInput,
                 mAllocHBlurS);
-        mRSCBlurVS = new RSCBlurVStrict(mRS, radiusX2, mRetWidth, mHeight, mAllocGuassKernel,
+        mRSCBlurVS = new RSCBlurVStrict(mRS, radiusX2, mWidthS, mHeight, mAllocGuassKernel,
                 mAllocHBlurS, mAllocVBlurS);
 
         short max = (short)(mWidth > mHeight ? mWidth : mHeight);
@@ -199,7 +208,7 @@ public final class GaussBlur {
         mAllocInput.copyFrom(input);
         mRSCBlurHS.process(mAllocEachLineH);
         mRSCBlurVS.process(mAllocEachLineVS);
-        Bitmap retBmp = Bitmap.createBitmap(mRetWidth, mRetHeight, Bitmap.Config.ARGB_8888);
+        Bitmap retBmp = Bitmap.createBitmap(mWidthS, mHeightS, Bitmap.Config.ARGB_8888);
         mAllocVBlurS.copyTo(retBmp);
         return retBmp;
     }

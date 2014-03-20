@@ -3,7 +3,6 @@
 
 uint32_t radiusX2;
 uint32_t dstlen;
-uint32_t srclen;
 uint32_t width;
 uchar4 *gDst;
 const uchar4 *gSrc;
@@ -35,8 +34,7 @@ void root(const uint16_t *eachline) {
     uint32_t c_in, c_rt, in_tp;
     float4 color_in, color;
     size = radiusX2 + 1;
-    c_rt = *eachline;
-    c_in = c_rt;
+    c_in = c_rt = *eachline;
 
     for (i = 0; i < dstlen; i++, c_in += width, c_rt += width, color = 0.0f) {
         in_tp = c_in;
